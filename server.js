@@ -253,7 +253,7 @@ async function autoAllocateSavingsForPaycheck(paycheckId) {
     await run(
       `INSERT INTO savings_contributions (savings_goal_id, paycheck_id, amount, date, note, auto)
        VALUES (?, ?, ?, ?, ?, 1)`,
-      [c.goal.id, paycheckId, +amount.toFixed(2), paycheck.date, 'Auto-allocated', 1]
+      [c.goal.id, paycheckId, +amount.toFixed(2), paycheck.date, 'Auto-allocated']
     );
     available -= amount;
     created.push({ goal_id: c.goal.id, amount });
