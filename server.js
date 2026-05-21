@@ -706,14 +706,50 @@ app.get('/api/savings', async (req, res) => {
     const goals = await query('SELECT * FROM savings_goals ORDER BY priority DESC, name ASC');
     const freq = await getSetting('pay_frequency', 'biweekly');
     const periodDays = frequencyDays(freq);
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Compute available-per-check from the next upcoming paycheck
+    const nextPC = await get(
+      'SELECT * FROM paychecks WHERE date >= ? ORDER BY date ASC LIMIT 1',
+      [todayStr]
+    );
+    let available_per_check = 0;
+    if (nextPC) {
+      const { assigned } = await computeAssignedBills(nextPC);
+      const pcEvents = await query('SELECT * FROM events WHERE paycheck_id=?', [nextPC.id]);
+      const pcBills = assigned.reduce((s, b) => s + (b.actual_amount ?? b.assigned_portion), 0);
+      const pcEvts = pcEvents.reduce((s, e) => s + (e.actual_cost ?? e.estimated_cost ?? 0), 0);
+      const pcContribs = await get(
+        'SELECT COALESCE(SUM(amount),0) as t FROM savings_contributions WHERE paycheck_id=?',
+        [nextPC.id]
+      );
+      available_per_check = Math.max(0, (nextPC.amount || 0) - pcBills - pcEvts - (pcContribs?.t || 0));
+    }
 
     const enriched = await Promise.all(goals.map(async g => {
-      const contribRow = await get(
-        'SELECT COALESCE(SUM(amount), 0) as total FROM savings_contributions WHERE savings_goal_id=?',
-        [g.id]
+      // ACTUAL savings = contributions from paychecks that have already arrived (date <= today)
+      // or manual contributions (no paycheck link) with date <= today
+      const actualRow = await get(
+        `SELECT COALESCE(SUM(sc.amount), 0) as total FROM savings_contributions sc
+         LEFT JOIN paychecks p ON sc.paycheck_id = p.id
+         WHERE sc.savings_goal_id = ?
+           AND (sc.date <= ? OR (sc.paycheck_id IS NOT NULL AND p.date <= ?))`,
+        [g.id, todayStr, todayStr]
       );
-      const totalContributed = contribRow ? contribRow.total : 0;
-      const current = g.current_amount + totalContributed;
+      const actualContributed = actualRow?.total || 0;
+
+      // PLANNED savings = future auto-allocated contributions (date > today)
+      const plannedRow = await get(
+        `SELECT COALESCE(SUM(sc.amount), 0) as total FROM savings_contributions sc
+         LEFT JOIN paychecks p ON sc.paycheck_id = p.id
+         WHERE sc.savings_goal_id = ? AND sc.auto = 1
+           AND (sc.date > ? OR (sc.paycheck_id IS NOT NULL AND p.date > ?))`,
+        [g.id, todayStr, todayStr]
+      );
+      const plannedContributed = plannedRow?.total || 0;
+
+      // "Current" = base amount + ACTUAL contributions only
+      const current = g.current_amount + actualContributed;
       const pct = g.target_amount > 0 ? Math.min(100, (current / g.target_amount) * 100) : 0;
 
       // Catch-up calc: required per-check given target_date (uses actual pay freq)
@@ -729,18 +765,18 @@ app.get('/api/savings', async (req, res) => {
         on_track = (g.per_check_contribution || 0) >= suggested_per_check - 0.5;
       }
 
-      // Recent contributions (last 5)
+      // Recent contributions (last 5, any status)
       const recent = await query(
         `SELECT amount, date, auto, note FROM savings_contributions
          WHERE savings_goal_id=? ORDER BY date DESC LIMIT 5`,
         [g.id]
       );
 
-      // Savings velocity: compare last 30d contributions vs previous 30d
+      // Savings velocity: compare last 30d actual contributions vs previous 30d
       const last30 = await get(
         `SELECT COALESCE(SUM(amount),0) as t FROM savings_contributions
-         WHERE savings_goal_id=? AND date >= date('now', '-30 days')`,
-        [g.id]
+         WHERE savings_goal_id=? AND date >= date('now', '-30 days') AND date <= ?`,
+        [g.id, todayStr]
       );
       const prev30 = await get(
         `SELECT COALESCE(SUM(amount),0) as t FROM savings_contributions
@@ -751,8 +787,9 @@ app.get('/api/savings', async (req, res) => {
 
       return {
         ...g,
-        current_amount: current,
-        contributed: totalContributed,
+        current_amount: current,             // base + actual contributions
+        contributed: actualContributed,       // only past/today contributions
+        planned: plannedContributed,          // future auto-allocations
         progress_pct: pct,
         suggested_per_check,
         on_track,
@@ -761,7 +798,9 @@ app.get('/api/savings', async (req, res) => {
         last_30d: last30?.t || 0,
       };
     }));
-    res.json(enriched);
+
+    // Attach available_per_check to the response
+    res.json({ goals: enriched, available_per_check, next_paycheck: nextPC ? { date: nextPC.date, amount: nextPC.amount } : null });
   } catch(e) { res.status(500).json({error: e.message}); }
 });
 
