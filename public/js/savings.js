@@ -2,12 +2,21 @@ let allGoals = [];
 let allPaychecks = [];
 let editingGoalId = null;
 let savingsChart = null;
+let availablePerCheck = 0;
+let nextPaycheck = null;
 
 async function loadSavings() {
-  [allGoals, allPaychecks] = await Promise.all([
+  const [savingsResp, pcs] = await Promise.all([
     API.get('/api/savings'),
     API.get('/api/paychecks')
   ]);
+
+  // The savings endpoint now returns { goals, available_per_check, next_paycheck }
+  allGoals = savingsResp.goals || savingsResp;  // backward compat
+  availablePerCheck = savingsResp.available_per_check || 0;
+  nextPaycheck = savingsResp.next_paycheck || null;
+  allPaychecks = pcs;
+
   renderStats();
   renderGoals();
   populatePaycheckDropdown();
@@ -16,13 +25,17 @@ async function loadSavings() {
 
 function renderStats() {
   const active = allGoals.filter(g => g.active);
+
+  // Only count ACTUAL savings (base amount + past contributions)
   const totalSaved = active.reduce((s, g) => s + g.current_amount, 0);
   const totalTarget = active.reduce((s, g) => s + g.target_amount, 0);
+  const totalPlanned = active.reduce((s, g) => s + (g.planned || 0), 0);
   const perCheck = active.reduce((s, g) => s + (g.per_check_contribution || 0), 0);
   const overallPct = totalTarget > 0 ? Math.min(100, (totalSaved / totalTarget) * 100) : 0;
 
   document.getElementById('sv-goals').textContent = active.length;
   document.getElementById('sv-saved').textContent = fmt(totalSaved);
+
   const targetEl = document.getElementById('sv-target');
   if (targetEl) targetEl.textContent = fmt(totalTarget);
   const perCheckEl = document.getElementById('sv-per-check');
@@ -35,18 +48,22 @@ function renderStats() {
     bar.style.background = `linear-gradient(90deg, var(--teal), var(--green))`;
   }
   const pctEl = document.getElementById('sv-overall-pct');
-  if (pctEl) pctEl.textContent = overallPct.toFixed(1) + '% overall';
-
-  // Savings rate
-  const rateEl = document.getElementById('sv-rate');
-  if (rateEl) {
-    const monthlyRate = perCheck * 2; // approximate monthly
-    rateEl.textContent = fmt(monthlyRate) + '/mo';
-  }
+  if (pctEl) pctEl.textContent = overallPct.toFixed(1) + '% saved';
 
   // Update overall bar labels
   const savedLabel = document.getElementById('sv-saved-label');
-  if (savedLabel) savedLabel.textContent = fmt(totalSaved) + ' saved';
+  if (savedLabel) savedLabel.textContent = fmt(totalSaved) + ' actually saved';
+
+  // Available per check (what you CAN save from the next paycheck)
+  const availEl = document.getElementById('sv-available');
+  if (availEl) availEl.textContent = fmt(availablePerCheck);
+
+  // Planned total
+  const plannedEl = document.getElementById('sv-planned');
+  if (plannedEl) {
+    plannedEl.textContent = fmt(totalPlanned);
+    plannedEl.title = 'Auto-allocated for future paychecks — not yet saved';
+  }
 
   // On-track count
   const onTrackEl = document.getElementById('sv-on-track');
@@ -83,6 +100,7 @@ function renderGoals() {
       : null;
     const ringColor = g.color || '#14b8a6';
     const offTrack = g.target_date && !g.on_track;
+    const planned = g.planned || 0;
 
     // Milestone badges
     let milestones = '';
@@ -145,6 +163,12 @@ function renderGoals() {
           <span>${fmt(g.per_check_contribution || 0)}/check · ${checksNeeded ? checksNeeded + ' checks left' : 'No auto-contribution'}</span>
         </div>
 
+        ${planned > 0 ? `
+          <div style="margin-top:8px;padding:6px 10px;background:var(--blue-dim);border:1px solid rgba(59,130,246,0.2);border-radius:var(--radius-sm);font-size:11px;color:var(--blue)">
+            📋 ${fmt(planned)} planned from upcoming paychecks
+          </div>
+        ` : ''}
+
         ${recentHtml ? `
           <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
             <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin-bottom:6px">Recent Activity</div>
@@ -169,7 +193,6 @@ async function renderSavingsChart() {
   const canvas = document.getElementById('savings-trend-chart');
   if (!canvas) return;
 
-  // Fetch contribution data for chart
   try {
     const contributions = await API.get('/api/savings/analytics');
     if (!contributions || !contributions.monthly_totals) return;
