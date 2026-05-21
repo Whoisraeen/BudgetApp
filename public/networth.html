@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Budget — Net Worth</title><link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .acct-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; transition: var(--transition); position: relative; overflow: hidden; }
+    .acct-card:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+    .acct-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+    .acct-name { font-weight: 700; font-size: 15px; }
+    .acct-inst { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+    .acct-bal { font-size: 26px; font-weight: 800; letter-spacing: -1px; }
+    .acct-type { font-size: 10px; padding: 2px 8px; border-radius: 99px; background: var(--bg-input); color: var(--text-secondary); display: inline-block; }
+    .nw-hero { background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(20,184,166,0.08)); border: 1px solid rgba(34,197,94,0.25); border-radius: var(--radius-xl); padding: 32px; margin-bottom: 24px; }
+    .nw-hero .nw-val { font-size: 48px; font-weight: 800; letter-spacing: -2px; }
+  </style></head>
+<body><div class="app-layout"><nav class="sidebar"></nav><main class="main-content">
+  <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px">
+    <div><h1>💎 Net Worth</h1><p>Assets − Debts = the number that matters</p></div>
+    <button class="btn btn-primary" onclick="openAddAcct()">+ Add Account</button>
+  </div>
+
+  <div class="nw-hero">
+    <div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Net Worth</div>
+    <div class="nw-val" id="nw-total" style="color:var(--green)">—</div>
+    <div style="display:flex;gap:32px;margin-top:18px;flex-wrap:wrap">
+      <div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px">Assets</div><div style="font-size:22px;font-weight:700;color:var(--green)" id="nw-assets">—</div></div>
+      <div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px">Debts</div><div style="font-size:22px;font-weight:700;color:var(--red)" id="nw-debts">—</div></div>
+      <div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px">Cash on Hand</div><div style="font-size:22px;font-weight:700;color:var(--teal)" id="nw-cash">—</div></div>
+      <div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px">Invested</div><div style="font-size:22px;font-weight:700;color:var(--blue)" id="nw-invest">—</div></div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:24px;align-items:start">
+    <div class="card">
+      <div class="card-title">Net Worth Over Time</div>
+      <div style="height:220px;position:relative"><canvas id="nw-trend"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Assets by Type</div>
+      <canvas id="nw-pie" height="180"></canvas>
+      <div id="nw-pie-legend" style="margin-top:12px;display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+  </div>
+
+  <div class="section-header" style="margin-bottom:14px"><div class="section-title">Accounts</div></div>
+  <div id="accts-grid" class="grid-auto"></div>
+</main></div>
+
+<div class="modal-overlay" id="acct-modal"><div class="modal">
+  <div class="modal-header"><div class="modal-title" id="acct-title">Add Account</div><button class="modal-close">✕</button></div>
+  <form id="acct-form">
+    <input type="hidden" id="acct-id" />
+    <div class="form-group"><label>Name *</label><input type="text" id="acct-name" placeholder="e.g. Chase Checking" required /></div>
+    <div class="form-row">
+      <div class="form-group"><label>Type *</label><select id="acct-type">
+        <option value="checking">Checking</option><option value="savings">Savings</option>
+        <option value="hysa">High-Yield Savings (HYSA)</option><option value="brokerage">Brokerage</option>
+        <option value="roth_ira">Roth IRA</option><option value="401k">401(k)</option>
+        <option value="investment">Other Investment</option><option value="crypto">Crypto</option>
+        <option value="property">Property/Real Estate</option><option value="vehicle">Vehicle</option>
+        <option value="cash">Cash</option><option value="other">Other</option>
+      </select></div>
+      <div class="form-group"><label>Balance *</label><input type="number" id="acct-balance" step="0.01" required /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>APY % (interest rate)</label><input type="number" id="acct-apy" step="0.01" value="0" /></div>
+      <div class="form-group"><label>Institution</label><input type="text" id="acct-inst" placeholder="e.g. Fidelity" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Color</label><input type="color" id="acct-color" value="#22c55e" /></div>
+    </div>
+    <div class="form-group"><label>Notes</label><textarea id="acct-note"></textarea></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-danger" onclick="deleteAcct()" id="acct-delete" style="display:none">Delete</button>
+      <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+      <button type="submit" class="btn btn-primary">Save</button>
+    </div>
+  </form>
+</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/networth.js"></script>
+</body></html>

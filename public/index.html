@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Budget — Dashboard</title>
+  <meta name="description" content="Personal budget dashboard with income, bills, events, and savings overview" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">💎</div>
+      <div>
+        <div class="logo-text">BudgetOS</div>
+        <div class="logo-sub">Personal Finance</div>
+      </div>
+    </div>
+    <span class="nav-section-label">Overview</span>
+    <a href="/index.html" class="nav-item" data-page="index.html"><span class="nav-icon">📊</span><span>Dashboard</span></a>
+    <a href="/calendar.html" class="nav-item" data-page="calendar.html"><span class="nav-icon">📅</span><span>Calendar</span></a>
+    <span class="nav-section-label">Money</span>
+    <a href="/paychecks.html" class="nav-item" data-page="paychecks.html"><span class="nav-icon">💰</span><span>Paychecks</span></a>
+    <a href="/bills.html" class="nav-item" data-page="bills.html"><span class="nav-icon">🧾</span><span>Bills</span></a>
+    <span class="nav-section-label">Planning</span>
+    <a href="/planner.html" class="nav-item" data-page="planner.html"><span class="nav-icon">📋</span><span>Planner</span></a>
+    <a href="/events.html" class="nav-item" data-page="events.html"><span class="nav-icon">🎉</span><span>Events</span></a>
+    <a href="/savings.html" class="nav-item" data-page="savings.html"><span class="nav-icon">🏦</span><span>Savings</span></a>
+    <div class="sidebar-footer">BudgetOS v1.0</div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main-content">
+    <div class="page-header">
+      <h1 id="greeting">Good evening 👋</h1>
+      <p id="today-date">Loading...</p>
+    </div>
+
+    <!-- Top stat cards -->
+    <div class="grid-4" style="margin-bottom:24px">
+      <div class="stat-card">
+        <div class="stat-icon green">💰</div>
+        <div class="stat-body">
+          <div class="stat-label">Next Paycheck</div>
+          <div class="stat-value green" id="next-paycheck-amount">—</div>
+          <div class="stat-meta" id="next-paycheck-date">Loading...</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon red">🧾</div>
+        <div class="stat-body">
+          <div class="stat-label">Monthly Bills</div>
+          <div class="stat-value red" id="monthly-bills">—</div>
+          <div class="stat-meta">Your portion only</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon purple">🎉</div>
+        <div class="stat-body">
+          <div class="stat-label">Planned Events</div>
+          <div class="stat-value purple" id="monthly-events">—</div>
+          <div class="stat-meta">This month</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon teal">🏦</div>
+        <div class="stat-body">
+          <div class="stat-label">Monthly Savings</div>
+          <div class="stat-value teal" id="monthly-savings">—</div>
+          <div class="stat-meta">All goals combined</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:24px;align-items:start">
+      <!-- Net remaining card -->
+      <div class="card">
+        <div class="card-title">This Month's Breakdown</div>
+        <div id="breakdown-rows">
+          <div class="breakdown-row"><span class="label">Monthly Income</span><span class="amount positive" id="bd-income">—</span></div>
+          <div class="breakdown-row"><span class="label">Bills (your portion)</span><span class="amount negative" id="bd-bills">—</span></div>
+          <div class="breakdown-row"><span class="label">Events</span><span class="amount negative" id="bd-events">—</span></div>
+          <div class="breakdown-row"><span class="label">Savings</span><span class="amount negative" id="bd-savings">—</span></div>
+          <div class="breakdown-row total"><span class="label">Net Remaining</span><span class="amount" id="bd-net">—</span></div>
+        </div>
+      </div>
+
+      <!-- Upcoming bills -->
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">Due in Next 14 Days</div>
+          <a href="/bills.html" class="btn btn-secondary btn-sm">View all</a>
+        </div>
+        <div id="upcoming-bills-list">
+          <div class="empty-state"><div class="empty-icon">✅</div><p>No bills due soon</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Net trend sparkline -->
+    <div class="card" style="margin-bottom:24px">
+      <div class="section-header" style="margin-bottom:8px">
+        <div>
+          <div class="card-title" style="margin-bottom:2px">Net Remaining — Trend</div>
+          <div style="font-size:12px;color:var(--text-secondary)">After bills, events &amp; savings, per paycheck</div>
+        </div>
+        <a href="/paychecks.html" class="btn btn-secondary btn-sm">Open paychecks</a>
+      </div>
+      <div style="height:160px;position:relative">
+        <canvas id="net-trend-chart"></canvas>
+        <div id="net-trend-empty" style="display:none;text-align:center;color:var(--text-muted);padding:50px 0;font-size:13px">
+          Tap a paycheck to populate this trend.
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:24px;align-items:start">
+      <!-- Category breakdown -->
+      <div class="card">
+        <div class="card-title">Spending by Category</div>
+        <canvas id="category-chart" height="200"></canvas>
+      </div>
+
+      <!-- Upcoming events -->
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">Upcoming Events</div>
+          <a href="/events.html" class="btn btn-secondary btn-sm">View all</a>
+        </div>
+        <div id="upcoming-events-list">
+          <div class="empty-state"><div class="empty-icon">🎉</div><p>No events planned</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Savings goals -->
+    <div class="card">
+      <div class="section-header">
+        <div class="section-title">Savings Goals</div>
+        <a href="/savings.html" class="btn btn-secondary btn-sm">Manage</a>
+      </div>
+      <div id="savings-list" class="grid-3" style="margin-top:8px">
+        <div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🏦</div><p>No savings goals yet</p></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/dashboard.js"></script>
+</body>
+</html>

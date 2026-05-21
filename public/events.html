@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Budget — Events</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .events-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 20px; }
+    .event-card { cursor: default; }
+    .event-card::before { background: var(--purple); }
+    .status-filter { display: flex; gap: 8px; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <nav class="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">💎</div><div><div class="logo-text">BudgetOS</div><div class="logo-sub">Personal Finance</div></div></div>
+    <span class="nav-section-label">Overview</span>
+    <a href="/index.html" class="nav-item" data-page="index.html"><span class="nav-icon">📊</span><span>Dashboard</span></a>
+    <a href="/calendar.html" class="nav-item" data-page="calendar.html"><span class="nav-icon">📅</span><span>Calendar</span></a>
+    <span class="nav-section-label">Money</span>
+    <a href="/paychecks.html" class="nav-item" data-page="paychecks.html"><span class="nav-icon">💰</span><span>Paychecks</span></a>
+    <a href="/bills.html" class="nav-item" data-page="bills.html"><span class="nav-icon">🧾</span><span>Bills</span></a>
+    <span class="nav-section-label">Planning</span>
+    <a href="/planner.html" class="nav-item" data-page="planner.html"><span class="nav-icon">📋</span><span>Planner</span></a>
+    <a href="/events.html" class="nav-item" data-page="events.html"><span class="nav-icon">🎉</span><span>Events</span></a>
+    <a href="/savings.html" class="nav-item" data-page="savings.html"><span class="nav-icon">🏦</span><span>Savings</span></a>
+    <div class="sidebar-footer">BudgetOS v1.0</div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>🎉 Events</h1>
+      <p>Plan concerts, trips, and big purchases — assign them to a paycheck</p>
+    </div>
+
+    <div class="grid-4" style="margin-bottom:24px">
+      <div class="stat-card">
+        <div class="stat-icon purple">🎉</div>
+        <div class="stat-body"><div class="stat-label">Total Events</div><div class="stat-value purple" id="ev-count">—</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon amber">💸</div>
+        <div class="stat-body"><div class="stat-label">Total Planned Cost</div><div class="stat-value amber" id="ev-total">—</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green">✅</div>
+        <div class="stat-body"><div class="stat-label">Paid Events</div><div class="stat-value green" id="ev-paid">—</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon red">⏳</div>
+        <div class="stat-body"><div class="stat-label">Upcoming Cost</div><div class="stat-value red" id="ev-upcoming">—</div></div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-bottom:16px">
+      <div class="status-filter">
+        <button class="tab active" data-filter="all" onclick="setFilter('all',this)">All</button>
+        <button class="tab" data-filter="upcoming" onclick="setFilter('upcoming',this)">Upcoming</button>
+        <button class="tab" data-filter="paid" onclick="setFilter('paid',this)">Paid</button>
+      </div>
+      <button class="btn btn-primary" onclick="openAddEvent()">+ Add Event</button>
+    </div>
+
+    <div class="events-grid" id="events-grid">
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-icon">🎉</div>
+        <p>No events yet. Add your first event!</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Add/Edit Event Modal -->
+<div class="modal-overlay" id="event-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="event-modal-title">Add Event</div>
+      <button class="modal-close">✕</button>
+    </div>
+    <form id="event-form">
+      <input type="hidden" id="event-id" />
+      <div class="form-group">
+        <label>Event Name *</label>
+        <input type="text" id="event-name" placeholder="e.g. Concert, Vacation, Birthday dinner" required />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date *</label>
+          <input type="date" id="event-date" required />
+        </div>
+        <div class="form-group">
+          <label>Estimated Cost ($) *</label>
+          <input type="number" id="event-cost" step="0.01" min="0" placeholder="0.00" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Category</label>
+          <select id="event-category">
+            <option>Entertainment</option>
+            <option>Travel</option>
+            <option>Food</option>
+            <option>Shopping</option>
+            <option>Health</option>
+            <option>Family</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Color</label>
+          <input type="color" id="event-color" value="#a855f7" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Assign to Paycheck</label>
+        <select id="event-paycheck">
+          <option value="">— Unassigned —</option>
+        </select>
+        <span class="input-hint">Which paycheck will cover this event?</span>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="event-note" placeholder="Tickets, hotel, etc."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Event</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script src="/js/events.js"></script>
+</body>
+</html>

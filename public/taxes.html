@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Budget — Taxes</title><link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .tax-bar { display: flex; height: 32px; border-radius: var(--radius-sm); overflow: hidden; margin: 16px 0; box-shadow: inset 0 0 0 1px var(--border); }
+    .tax-bar-seg { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; min-width: 30px; transition: var(--transition); }
+    .tax-bar-seg:hover { opacity: 0.85; }
+    .tax-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px; }
+    .tax-card-big { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+    .ring-mini { position: relative; width: 60px; height: 60px; flex-shrink: 0; }
+    .ring-mini svg { transform: rotate(-90deg); }
+    .ring-mini .pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; }
+  </style></head>
+<body><div class="app-layout"><nav class="sidebar"></nav><main class="main-content">
+  <div class="page-header"><h1>🏛️ Taxes</h1>
+    <p>YTD breakdown from your imported paystubs · projected annual liability</p></div>
+
+  <div style="display:flex;gap:12px;margin-bottom:24px;align-items:center">
+    <label style="font-size:13px;color:var(--text-secondary)">Tax Year:</label>
+    <select id="tax-year" style="width:120px"></select>
+  </div>
+
+  <div class="grid-4" style="margin-bottom:24px">
+    <div class="stat-card"><div class="stat-icon blue">💼</div><div class="stat-body"><div class="stat-label">YTD Gross Income</div><div class="stat-value blue" id="tx-gross">—</div><div class="stat-meta" id="tx-gross-meta">—</div></div></div>
+    <div class="stat-card"><div class="stat-icon red">🏛️</div><div class="stat-body"><div class="stat-label">YTD Total Tax</div><div class="stat-value red" id="tx-total">—</div><div class="stat-meta" id="tx-rate">—</div></div></div>
+    <div class="stat-card"><div class="stat-icon amber">📊</div><div class="stat-body"><div class="stat-label">Projected Annual Tax</div><div class="stat-value amber" id="tx-proj">—</div><div class="stat-meta">At current run-rate</div></div></div>
+    <div class="stat-card"><div class="stat-icon teal">✨</div><div class="stat-body"><div class="stat-label">YTD Take-Home</div><div class="stat-value teal" id="tx-net">—</div><div class="stat-meta" id="tx-takehome-pct">—</div></div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <div class="card-title">Where Your Tax Dollars Go</div>
+    <div class="tax-bar" id="tax-bar"></div>
+    <div id="tax-legend" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-top:14px"></div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:24px;align-items:start">
+    <div class="card">
+      <div class="card-title">Tax Detail (YTD)</div>
+      <div id="tax-detail"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Insights</div>
+      <div id="tax-insights"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Paycheck-by-Paycheck Tax History</div>
+    <div class="table-wrapper">
+      <table id="stub-table">
+        <thead><tr><th>Check Date</th><th>Gross</th><th>Federal</th><th>State</th><th>City</th><th>SS</th><th>Medicare</th><th>Net</th><th>Rate</th></tr></thead>
+        <tbody id="stub-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</main></div>
+<script src="/js/app.js"></script><script src="/js/taxes.js"></script></body></html>

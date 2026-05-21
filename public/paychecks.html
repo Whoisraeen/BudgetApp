@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Budget — Paychecks</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .pc-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
+    .pc-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 12px; overflow: hidden; transition: var(--transition); }
+    .pc-card:hover { border-color: var(--border-strong); }
+    .pc-card.pc-extra { border-left: 3px solid var(--purple); }
+    .pc-header { display: flex; align-items: center; gap: 14px; padding: 16px 20px; cursor: pointer; }
+    .pc-date-badge { background: var(--green-dim); border: 1px solid rgba(34,197,94,0.3); border-radius: var(--radius-sm); padding: 6px 12px; text-align: center; min-width: 60px; }
+    .pc-date-badge .day { font-size: 22px; font-weight: 800; color: var(--green); line-height: 1; }
+    .pc-date-badge .mon { font-size: 10px; font-weight: 600; color: var(--green); text-transform: uppercase; letter-spacing: 0.5px; }
+    .pc-info { flex: 1; }
+    .pc-info .pc-label { font-weight: 600; font-size: 15px; }
+    .pc-info .pc-sub { font-size: 12px; color: var(--text-muted); }
+    .pc-amount { font-size: 22px; font-weight: 800; color: var(--green); }
+    .pc-net { font-size: 13px; font-weight: 600; text-align: right; }
+    .pc-detail { border-top: 1px solid var(--border); padding: 16px 20px; display: none; }
+    .pc-detail.open { display: block; }
+    .pc-past { opacity: 0.5; }
+    .pc-past .pc-amount { color: var(--text-secondary); }
+    .setup-wizard { background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(129,140,248,0.08)); border: 1px solid rgba(99,102,241,0.25); border-radius: var(--radius-lg); padding: 24px; }
+
+    /* Timeline strip */
+    .timeline-strip-wrap { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 24px; overflow-x: auto; }
+    .timeline-strip { display: flex; gap: 12px; min-width: max-content; }
+    .tl-card { min-width: 130px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; cursor: pointer; transition: var(--transition); position: relative; }
+    .tl-card:hover { transform: translateY(-3px); border-color: var(--border-strong); box-shadow: var(--shadow); }
+    .tl-card.tl-next { border-color: rgba(34,197,94,0.5); box-shadow: 0 0 20px rgba(34,197,94,0.08); }
+    .tl-card.tl-extra { border-color: rgba(168,85,247,0.5); background: linear-gradient(180deg, rgba(168,85,247,0.08), var(--bg-surface) 60%); }
+    .tl-date-row { display: flex; align-items: baseline; gap: 4px; }
+    .tl-day { font-size: 28px; font-weight: 800; color: var(--text-primary); line-height: 1; }
+    .tl-mon { font-size: 13px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+    .tl-weekday { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .tl-amount { font-size: 18px; font-weight: 700; color: var(--green); margin-top: 8px; }
+    .tl-net { font-size: 11px; font-weight: 600; margin-top: 4px; }
+    .tl-net.pos { color: var(--green); }
+    .tl-net.neg { color: var(--red); }
+    .tl-tag { position: absolute; top: 8px; right: 8px; font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px; }
+    .tl-tag-next { background: var(--green-dim); color: var(--green); }
+    .tl-tag-bonus { background: var(--purple-dim); color: var(--purple); }
+
+    /* Trend chart card */
+    .trend-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 24px; }
+    .trend-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .trend-avg { font-size: 18px; font-weight: 800; color: var(--green); }
+
+    .skeleton { background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%); background-size: 200% 100%; border-radius: 6px; animation: skel 1.4s ease-in-out infinite; }
+    .skeleton-text { height: 14px; margin: 6px 0; }
+    @keyframes skel { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+    @media(max-width:900px){ .pc-layout { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <nav class="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">💎</div><div><div class="logo-text">BudgetOS</div><div class="logo-sub">Personal Finance</div></div></div>
+    <span class="nav-section-label">Overview</span>
+    <a href="/index.html" class="nav-item" data-page="index.html"><span class="nav-icon">📊</span><span>Dashboard</span></a>
+    <a href="/calendar.html" class="nav-item" data-page="calendar.html"><span class="nav-icon">📅</span><span>Calendar</span></a>
+    <span class="nav-section-label">Money</span>
+    <a href="/paychecks.html" class="nav-item" data-page="paychecks.html"><span class="nav-icon">💰</span><span>Paychecks</span></a>
+    <a href="/bills.html" class="nav-item" data-page="bills.html"><span class="nav-icon">🧾</span><span>Bills</span></a>
+    <span class="nav-section-label">Planning</span>
+    <a href="/planner.html" class="nav-item" data-page="planner.html"><span class="nav-icon">📋</span><span>Planner</span></a>
+    <a href="/events.html" class="nav-item" data-page="events.html"><span class="nav-icon">🎉</span><span>Events</span></a>
+    <a href="/savings.html" class="nav-item" data-page="savings.html"><span class="nav-icon">🏦</span><span>Savings</span></a>
+    <div class="sidebar-footer">BudgetOS v1.0</div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>💰 Paychecks</h1>
+      <p>Your income schedule with per-check breakdowns &amp; trend</p>
+    </div>
+
+    <div class="grid-4" style="margin-bottom:24px">
+      <div class="stat-card">
+        <div class="stat-icon green">📅</div>
+        <div class="stat-body"><div class="stat-label">Next Paycheck</div><div class="stat-value green" id="pc-next-date">—</div><div class="stat-meta" id="pc-days-away">—</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon teal">💵</div>
+        <div class="stat-body"><div class="stat-label">Per Check Amount</div><div class="stat-value teal" id="pc-amount">—</div><div class="stat-meta">Standard check</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon blue">📆</div>
+        <div class="stat-body"><div class="stat-label">Total Scheduled</div><div class="stat-value blue" id="pc-count">—</div><div class="stat-meta">Future paychecks</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon amber">📊</div>
+        <div class="stat-body"><div class="stat-label">Yearly Income</div><div class="stat-value amber" id="pc-yearly">—</div><div class="stat-meta">26 checks/year</div></div>
+      </div>
+    </div>
+
+    <!-- Horizontal timeline strip -->
+    <div class="timeline-strip-wrap">
+      <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px">Upcoming Timeline</div>
+      <div class="timeline-strip" id="timeline-strip"></div>
+    </div>
+
+    <!-- Net trend chart -->
+    <div class="trend-card">
+      <div class="trend-card-header">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px">Net Remaining Trend</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:2px">After bills, events &amp; savings — open paychecks to populate</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--text-muted)">AVG NET</div>
+          <div class="trend-avg" id="trend-avg">—</div>
+        </div>
+      </div>
+      <div style="height:200px;position:relative">
+        <canvas id="trend-chart"></canvas>
+        <div id="trend-empty" style="display:none;text-align:center;color:var(--text-muted);padding:60px 0">
+          Tap a paycheck below to populate the trend.
+        </div>
+      </div>
+    </div>
+
+    <div class="pc-layout">
+      <!-- Paycheck list -->
+      <div>
+        <div class="section-header" style="margin-bottom:16px">
+          <div class="section-title">All Paychecks</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" id="show-past-btn" onclick="togglePast()">Show Past</button>
+            <button class="btn btn-primary" onclick="openModal('edit-pc-modal')" id="bulk-edit-btn">✏️ Edit Amount</button>
+          </div>
+        </div>
+        <div id="paychecks-list"></div>
+      </div>
+
+      <!-- Setup wizard -->
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="setup-wizard" id="setup-section">
+          <div style="font-size:16px;font-weight:700;margin-bottom:4px">⚡ Paycheck Setup</div>
+          <div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">Generate your full pay schedule</div>
+          <div class="form-group">
+            <label>Pay Frequency</label>
+            <select id="gen-frequency">
+              <option value="weekly">Weekly</option>
+              <option value="biweekly" selected>Bi-weekly (every 2 weeks)</option>
+              <option value="semimonthly">Semi-monthly (1st &amp; 15th)</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>First Paycheck Date</label>
+            <input type="date" id="gen-start-date" value="2026-05-27" />
+          </div>
+          <div class="form-group">
+            <label>Amount Per Check ($)</label>
+            <input type="number" id="gen-amount" step="0.01" min="0" placeholder="e.g. 1400.00" />
+          </div>
+          <div class="form-group">
+            <label>Generate How Many Checks?</label>
+            <select id="gen-count">
+              <option value="26">1 Year</option>
+              <option value="54" selected>2 Years</option>
+              <option value="78">3 Years</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="generateSchedule()">🗓️ Generate Schedule</button>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center">This will replace all future paychecks</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Edit single paycheck modal -->
+<div class="modal-overlay" id="edit-pc-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="edit-pc-title">Edit Paycheck</div>
+      <button class="modal-close">✕</button>
+    </div>
+    <form id="edit-pc-form">
+      <input type="hidden" id="edit-pc-id" />
+      <div class="form-group">
+        <label>Amount ($)</label>
+        <input type="number" id="edit-pc-amount" step="0.01" min="0" required />
+      </div>
+      <div class="form-group">
+        <label>Label</label>
+        <input type="text" id="edit-pc-label" placeholder="Paycheck" />
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="edit-pc-note" placeholder="e.g. Bonus included"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/paychecks.js"></script>
+</body>
+</html>

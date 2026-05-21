@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Budget — Debts</title><link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .debt-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; transition: var(--transition); position: relative; overflow: hidden; cursor: pointer; }
+    .debt-card:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+    .debt-card.high-apr { border-color: rgba(239,68,68,0.4); }
+    .debt-card.high-apr::before { content: '🔥'; position: absolute; top: 12px; right: 12px; font-size: 18px; }
+    .strategy-card { background: linear-gradient(135deg, var(--accent-dim), rgba(168,85,247,0.08)); border: 1px solid rgba(99,102,241,0.3); border-radius: var(--radius-xl); padding: 28px; }
+    .strategy-big { font-size: 38px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; }
+  </style></head>
+<body><div class="app-layout"><nav class="sidebar"></nav><main class="main-content">
+  <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px">
+    <div><h1>💳 Debt Manager</h1><p>Avalanche vs snowball · payoff projections with extra-payment scenarios</p></div>
+    <button class="btn btn-primary" onclick="openAddDebt()">+ Add Debt</button>
+  </div>
+
+  <div class="grid-3" style="margin-bottom:24px">
+    <div class="stat-card"><div class="stat-icon red">💳</div><div class="stat-body"><div class="stat-label">Total Debt</div><div class="stat-value red" id="d-total">—</div></div></div>
+    <div class="stat-card"><div class="stat-icon amber">📊</div><div class="stat-body"><div class="stat-label">Weighted Avg APR</div><div class="stat-value amber" id="d-apr">—</div></div></div>
+    <div class="stat-card"><div class="stat-icon purple">📅</div><div class="stat-body"><div class="stat-label">Monthly Minimums</div><div class="stat-value purple" id="d-min">—</div></div></div>
+  </div>
+
+  <div class="strategy-card" style="margin-bottom:24px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:18px">
+      <div>
+        <div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px">Payoff Strategy</div>
+        <div style="font-size:24px;font-weight:800;margin-top:4px" id="strat-title">Calculating...</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <label style="font-size:13px;color:var(--text-secondary)">Extra/month:</label>
+        <input type="number" id="extra-input" value="200" step="50" style="width:100px" oninput="loadStrategy()" />
+      </div>
+    </div>
+    <div class="grid-2" style="gap:16px">
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">🔥 Avalanche (highest APR first)</div>
+        <div class="strategy-big" id="ava-time">—</div>
+        <div style="color:var(--text-secondary);font-size:13px;margin-top:6px" id="ava-int">—</div>
+        <div style="font-size:12px;margin-top:8px;color:var(--text-muted)" id="ava-order"></div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">❄️ Snowball (smallest balance first)</div>
+        <div class="strategy-big" id="sno-time">—</div>
+        <div style="color:var(--text-secondary);font-size:13px;margin-top:6px" id="sno-int">—</div>
+        <div style="font-size:12px;margin-top:8px;color:var(--text-muted)" id="sno-order"></div>
+      </div>
+    </div>
+    <div id="strat-recommend" style="margin-top:18px;padding:14px;border-radius:var(--radius-sm);background:var(--bg-input);font-size:13px"></div>
+  </div>
+
+  <div class="section-header"><div class="section-title">All Debts</div></div>
+  <div id="debts-grid" class="grid-auto"></div>
+</main></div>
+
+<div class="modal-overlay" id="debt-modal"><div class="modal">
+  <div class="modal-header"><div class="modal-title" id="debt-title">Add Debt</div><button class="modal-close">✕</button></div>
+  <form id="debt-form">
+    <input type="hidden" id="debt-id" />
+    <div class="form-group"><label>Name *</label><input type="text" id="debt-name" placeholder="e.g. Capital One Visa" required /></div>
+    <div class="form-row">
+      <div class="form-group"><label>Type</label><select id="debt-type">
+        <option value="credit_card">Credit Card</option><option value="student_loan">Student Loan</option>
+        <option value="auto_loan">Auto Loan</option><option value="mortgage">Mortgage</option>
+        <option value="personal_loan">Personal Loan</option><option value="medical">Medical</option>
+        <option value="other">Other</option></select></div>
+      <div class="form-group"><label>Current Balance *</label><input type="number" id="debt-balance" step="0.01" required /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>APR % *</label><input type="number" id="debt-apr" step="0.01" required /></div>
+      <div class="form-group"><label>Minimum Payment</label><input type="number" id="debt-min" step="0.01" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Original Balance</label><input type="number" id="debt-orig" step="0.01" /></div>
+      <div class="form-group"><label>Due Day</label><input type="number" id="debt-due" min="1" max="31" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Color</label><input type="color" id="debt-color" value="#ef4444" /></div>
+    </div>
+    <div class="form-group"><label>Notes</label><textarea id="debt-note"></textarea></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-danger" onclick="deleteDebt()" id="debt-delete" style="display:none">Delete</button>
+      <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+      <button type="submit" class="btn btn-primary">Save</button>
+    </div>
+  </form>
+</div></div>
+
+<script src="/js/app.js"></script>
+<script src="/js/debts.js"></script>
+</body></html>

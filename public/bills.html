@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Budget — Bills</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .bills-summary { display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start; margin-bottom: 24px; }
+    .split-preview { background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin-top: 10px; }
+    .split-preview .sp-label { font-size: 11px; color: var(--text-muted); }
+    .split-preview .sp-value { font-size: 22px; font-weight: 800; color: var(--green); }
+    .cat-filter { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    .cat-btn { padding: 5px 14px; border-radius: 99px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-secondary); transition: var(--transition); }
+    .cat-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .cat-btn:hover:not(.active) { border-color: var(--border-strong); color: var(--text-primary); }
+    @media(max-width:900px){ .bills-summary { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <nav class="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">💎</div><div><div class="logo-text">BudgetOS</div><div class="logo-sub">Personal Finance</div></div></div>
+    <span class="nav-section-label">Overview</span>
+    <a href="/index.html" class="nav-item" data-page="index.html"><span class="nav-icon">📊</span><span>Dashboard</span></a>
+    <a href="/calendar.html" class="nav-item" data-page="calendar.html"><span class="nav-icon">📅</span><span>Calendar</span></a>
+    <span class="nav-section-label">Money</span>
+    <a href="/paychecks.html" class="nav-item" data-page="paychecks.html"><span class="nav-icon">💰</span><span>Paychecks</span></a>
+    <a href="/bills.html" class="nav-item" data-page="bills.html"><span class="nav-icon">🧾</span><span>Bills</span></a>
+    <span class="nav-section-label">Planning</span>
+    <a href="/planner.html" class="nav-item" data-page="planner.html"><span class="nav-icon">📋</span><span>Planner</span></a>
+    <a href="/events.html" class="nav-item" data-page="events.html"><span class="nav-icon">🎉</span><span>Events</span></a>
+    <a href="/savings.html" class="nav-item" data-page="savings.html"><span class="nav-icon">🏦</span><span>Savings</span></a>
+    <div class="sidebar-footer">BudgetOS v1.0</div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>🧾 Bills</h1>
+      <p>Manage recurring bills with automatic split calculations</p>
+    </div>
+
+    <!-- Summary row -->
+    <div class="grid-4" style="margin-bottom:24px">
+      <div class="stat-card">
+        <div class="stat-icon red">🧾</div>
+        <div class="stat-body"><div class="stat-label">Total Monthly (My Share)</div><div class="stat-value red" id="s-total">—</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon amber">📋</div>
+        <div class="stat-body"><div class="stat-label">Active Bills</div><div class="stat-value amber" id="s-count">—</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon blue">👥</div>
+        <div class="stat-body"><div class="stat-label">Split Bills</div><div class="stat-value blue" id="s-split">—</div><div class="stat-meta">Bills shared with others</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon purple">📅</div>
+        <div class="stat-body"><div class="stat-label">Due This Week</div><div class="stat-value purple" id="s-due-soon">—</div></div>
+      </div>
+    </div>
+
+    <!-- Charts + table -->
+    <div class="bills-summary">
+      <!-- Bills table -->
+      <div>
+        <div class="section-header">
+          <div class="section-title">All Bills</div>
+          <button class="btn btn-primary" onclick="openModal('bill-modal')" id="add-bill-btn">+ Add Bill</button>
+        </div>
+
+        <!-- Category filter -->
+        <div class="cat-filter" id="cat-filter">
+          <button class="cat-btn active" data-cat="all">All</button>
+          <button class="cat-btn" data-cat="Housing">Housing</button>
+          <button class="cat-btn" data-cat="Utilities">Utilities</button>
+          <button class="cat-btn" data-cat="Phone">Phone</button>
+          <button class="cat-btn" data-cat="Transport">Transport</button>
+          <button class="cat-btn" data-cat="Subscriptions">Subscriptions</button>
+          <button class="cat-btn" data-cat="Credit Card">Credit Card</button>
+          <button class="cat-btn" data-cat="Savings">🏦 Savings</button>
+          <button class="cat-btn" data-cat="Other">Other</button>
+        </div>
+
+        <div class="table-wrapper">
+          <table id="bills-table">
+            <thead>
+              <tr>
+                <th>Bill</th>
+                <th>Full Amount</th>
+                <th>Split</th>
+                <th>My Portion</th>
+                <th>Due Date</th>
+                <th>Paycheck</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="bills-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pie charts sidebar -->
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="card">
+          <div class="card-title">Bills by Category</div>
+          <canvas id="bills-pie" height="220"></canvas>
+          <div id="pie-legend" style="margin-top:14px;display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Budget Breakdown</div>
+          <canvas id="budget-pie" height="220"></canvas>
+          <div id="budget-legend" style="margin-top:14px;display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Add/Edit Bill Modal -->
+<div class="modal-overlay" id="bill-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="bill-modal-title">Add Bill</div>
+      <button class="modal-close">✕</button>
+    </div>
+    <form id="bill-form">
+      <input type="hidden" id="bill-id" />
+      <div class="form-group">
+        <label>Bill Name *</label>
+        <input type="text" id="bill-name" placeholder="e.g. Rent, Netflix, Phone Bill" required />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Total Amount *</label>
+          <input type="number" id="bill-total" step="0.01" min="0" placeholder="0.00" required />
+        </div>
+        <div class="form-group">
+          <label>Split Between (people)</label>
+          <input type="number" id="bill-split" min="1" max="20" value="1" />
+        </div>
+      </div>
+      <!-- Live split preview -->
+      <div class="split-preview">
+        <div class="sp-label">Your portion</div>
+        <div class="sp-value" id="split-result">$0.00</div>
+        <div class="sp-label" id="split-formula">Full amount (no split)</div>
+      </div>
+      <div class="form-group" style="margin-top:14px">
+        <label>Override My Portion (optional)</label>
+        <input type="number" id="bill-portion" step="0.01" min="0" placeholder="Leave blank to auto-calculate" />
+        <span class="input-hint">Only set this if your share isn't exactly Total ÷ Split</span>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Due Day (day of month)</label>
+          <input type="number" id="bill-due" min="1" max="31" placeholder="e.g. 1, 15, 28" />
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="bill-category">
+            <option>Housing</option>
+            <option>Utilities</option>
+            <option>Phone</option>
+            <option>Transport</option>
+            <option>Subscriptions</option>
+            <option>Credit Card</option>
+            <option>Food</option>
+            <option>Health</option>
+            <option>Entertainment</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Paycheck Assignment</label>
+          <select id="bill-slot">
+            <option value="auto">Auto (by due date)</option>
+            <option value="every_check">Every Paycheck</option>
+            <option value="check1">1st Paycheck of Month</option>
+            <option value="check2">2nd Paycheck of Month</option>
+            <option value="split">Split (Half & Half)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Color</label>
+          <input type="color" id="bill-color" value="#ef4444" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Remaining Payments (optional)</label>
+          <input type="number" id="bill-remaining" min="0" placeholder="Leave blank for ongoing" />
+          <span class="input-hint">For finite bills like Rent-a-Center — auto-deactivates when done</span>
+        </div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:8px;margin-top:24px;cursor:pointer">
+            <input type="checkbox" id="bill-variable" style="width:18px;height:18px" />
+            <span>Variable amount</span>
+          </label>
+          <span class="input-hint">Estimate — track actual cost per occurrence</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="bill-note" placeholder="Any additional notes..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Bill</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Inline savings goal edit modal -->
+<div class="modal-overlay" id="savings-edit-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">Edit Savings Goal</div>
+      <button class="modal-close">✕</button>
+    </div>
+    <form id="savings-edit-form">
+      <input type="hidden" id="sve-id" />
+      <div class="form-group"><label>Name</label><input type="text" id="sve-name" required /></div>
+      <div class="form-row">
+        <div class="form-group"><label>Target Amount</label><input type="number" id="sve-target" step="0.01" required /></div>
+        <div class="form-group"><label>Per-Check Contribution</label><input type="number" id="sve-per" step="0.01" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Priority (0-10)</label><input type="number" id="sve-priority" min="0" max="10" value="0" /></div>
+        <div class="form-group"><label>Target Date</label><input type="date" id="sve-date" /></div>
+      </div>
+      <div class="form-group" style="background:var(--teal-dim);border:1px solid rgba(20,184,166,0.3);border-radius:var(--radius-sm);padding:12px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:0">
+          <input type="checkbox" id="sve-auto" style="width:18px;height:18px;cursor:pointer" />
+          <span style="font-weight:600;color:var(--teal)">⚡ Auto-allocate from each paycheck</span>
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Occurrence history modal -->
+<div class="modal-overlay" id="history-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="history-title">History</div>
+      <button class="modal-close">✕</button>
+    </div>
+    <div id="history-body" style="max-height:60vh;overflow-y:auto"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary modal-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/bills.js"></script>
+</body>
+</html>

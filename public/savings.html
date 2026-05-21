@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Budget — Savings</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .savings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+    .ring-wrap { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+    .ring-wrap svg { transform: rotate(-90deg); }
+    .ring-pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; }
+    .contrib-list { max-height: 200px; overflow-y: auto; }
+    .contrib-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .contrib-row:last-child { border: none; }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <nav class="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">💎</div><div><div class="logo-text">BudgetOS</div><div class="logo-sub">Personal Finance</div></div></div>
+    <span class="nav-section-label">Overview</span>
+    <a href="/index.html" class="nav-item" data-page="index.html"><span class="nav-icon">📊</span><span>Dashboard</span></a>
+    <a href="/calendar.html" class="nav-item" data-page="calendar.html"><span class="nav-icon">📅</span><span>Calendar</span></a>
+    <span class="nav-section-label">Money</span>
+    <a href="/paychecks.html" class="nav-item" data-page="paychecks.html"><span class="nav-icon">💰</span><span>Paychecks</span></a>
+    <a href="/bills.html" class="nav-item" data-page="bills.html"><span class="nav-icon">🧾</span><span>Bills</span></a>
+    <span class="nav-section-label">Planning</span>
+    <a href="/planner.html" class="nav-item" data-page="planner.html"><span class="nav-icon">📋</span><span>Planner</span></a>
+    <a href="/events.html" class="nav-item" data-page="events.html"><span class="nav-icon">🎉</span><span>Events</span></a>
+    <a href="/savings.html" class="nav-item" data-page="savings.html"><span class="nav-icon">🏦</span><span>Savings</span></a>
+    <div class="sidebar-footer">BudgetOS v1.0</div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>🏦 Savings</h1>
+      <p>Track your goals and contributions per paycheck</p>
+    </div>
+
+    <div class="grid-4" style="margin-bottom:24px">
+      <div class="stat-card">
+        <div class="stat-icon teal">🎯</div>
+        <div class="stat-body"><div class="stat-label">Active Goals</div><div class="stat-value teal" id="sv-goals">—</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green">💰</div>
+        <div class="stat-body"><div class="stat-label">Total Saved</div><div class="stat-value green" id="sv-saved">—</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon blue">🎯</div>
+        <div class="stat-body"><div class="stat-label">Total Target</div><div class="stat-value blue" id="sv-target">—</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon purple">💸</div>
+        <div class="stat-body"><div class="stat-label">Per Paycheck Total</div><div class="stat-value purple" id="sv-per-check">—</div><div class="stat-meta">All goals combined</div></div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-bottom:20px">
+      <div class="section-title">Your Goals</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" id="auto-allocate-btn" title="Auto-allocate savings to upcoming paychecks based on per-check + priority + target dates">⚡ Auto-Allocate Upcoming</button>
+        <button class="btn btn-primary" onclick="openAddGoal()">+ Add Goal</button>
+      </div>
+    </div>
+
+    <div class="savings-grid" id="savings-grid">
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-icon">🏦</div>
+        <p>No savings goals yet. Create your first goal!</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Add/Edit Goal Modal -->
+<div class="modal-overlay" id="goal-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="goal-modal-title">Add Savings Goal</div>
+      <button class="modal-close">✕</button>
+    </div>
+    <form id="goal-form">
+      <input type="hidden" id="goal-id" />
+      <div class="form-group">
+        <label>Goal Name *</label>
+        <input type="text" id="goal-name" placeholder="e.g. Emergency Fund, Vacation, New Car" required />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Target Amount ($) *</label>
+          <input type="number" id="goal-target" step="0.01" min="0" placeholder="0.00" required />
+        </div>
+        <div class="form-group">
+          <label>Currently Saved ($)</label>
+          <input type="number" id="goal-current" step="0.01" min="0" placeholder="0.00" value="0" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Per Paycheck Contribution ($)</label>
+          <input type="number" id="goal-per-check" step="0.01" min="0" placeholder="0.00" />
+          <span class="input-hint">Amount to save from each bi-weekly paycheck</span>
+        </div>
+        <div class="form-group">
+          <label>Target Date (optional)</label>
+          <input type="date" id="goal-date" />
+        </div>
+      </div>
+      <!-- Projected completion -->
+      <div class="split-preview" id="goal-projection" style="display:none">
+        <div class="sp-label">Projected completion</div>
+        <div class="sp-value" id="goal-proj-date" style="font-size:16px">—</div>
+        <div class="sp-label" id="goal-proj-checks">—</div>
+      </div>
+      <div class="form-row" style="margin-top:14px">
+        <div class="form-group">
+          <label>Color</label>
+          <input type="color" id="goal-color" value="#14b8a6" />
+        </div>
+        <div class="form-group">
+          <label>Priority (higher = funded first)</label>
+          <input type="number" id="goal-priority" min="0" max="10" value="0" />
+        </div>
+      </div>
+      <div class="form-group" style="background:var(--teal-dim);border:1px solid rgba(20,184,166,0.3);border-radius:var(--radius-sm);padding:12px;margin-top:8px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:0">
+          <input type="checkbox" id="goal-auto" style="width:18px;height:18px;cursor:pointer" checked />
+          <div>
+            <div style="font-weight:600;color:var(--teal)">⚡ Auto-allocate from each paycheck</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;font-weight:400">Pay-yourself-first: contribute automatically when paychecks land, capped at available net.</div>
+          </div>
+        </label>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="goal-note" placeholder="What is this goal for?"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Goal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Add Contribution Modal -->
+<div class="modal-overlay" id="contrib-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title" id="contrib-modal-title">Add Contribution</div>
+      <button class="modal-close">✕</button>
+    </div>
+    <form id="contrib-form">
+      <input type="hidden" id="contrib-goal-id" />
+      <div class="form-group">
+        <label>Amount ($) *</label>
+        <input type="number" id="contrib-amount" step="0.01" min="0" placeholder="0.00" required />
+      </div>
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="contrib-date" />
+      </div>
+      <div class="form-group">
+        <label>Link to Paycheck (optional)</label>
+        <select id="contrib-paycheck"><option value="">— None —</option></select>
+      </div>
+      <div class="form-group">
+        <label>Note</label>
+        <input type="text" id="contrib-note" placeholder="e.g. Transfer to savings" />
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Contribution</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script src="/js/savings.js"></script>
+</body>
+</html>

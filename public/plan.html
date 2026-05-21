@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Budget — Plan to Millionaire</title><link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .hero { background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(168,85,247,0.12) 50%, rgba(20,184,166,0.08)); border: 1px solid rgba(99,102,241,0.3); border-radius: var(--radius-xl); padding: 32px; margin-bottom: 24px; position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; top: -100px; right: -100px; width: 400px; height: 400px; background: radial-gradient(circle, rgba(99,102,241,0.2) 0%, transparent 70%); }
+    .hero h2 { font-size: 28px; font-weight: 800; letter-spacing: -0.8px; margin-bottom: 4px; background: linear-gradient(135deg, #f0f4ff, #a5b4fc, #14b8a6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .btn-mega { padding: 16px 32px; font-size: 16px; font-weight: 700; background: linear-gradient(135deg, var(--accent), #a855f7, #14b8a6); color: #fff; border-radius: 12px; border: none; cursor: pointer; box-shadow: 0 8px 24px rgba(99,102,241,0.4); transition: var(--transition); }
+    .btn-mega:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(99,102,241,0.5); }
+    .rec-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 12px; display: flex; gap: 16px; align-items: flex-start; transition: var(--transition); }
+    .rec-card:hover { border-color: var(--border-strong); }
+    .rec-step { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; flex-shrink: 0; }
+    .rec-card h4 { font-size: 16px; margin-bottom: 4px; }
+    .rec-amt { font-size: 20px; font-weight: 800; color: var(--green); margin-left: auto; white-space: nowrap; }
+    .warning-card { background: var(--red-dim); border: 1px solid rgba(239,68,68,0.3); border-radius: var(--radius-sm); padding: 14px 18px; margin-bottom: 10px; font-size: 14px; }
+    .warning-card.medium { background: var(--amber-dim); border-color: rgba(245,158,11,0.3); }
+    .warning-card.high { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); }
+    .scenario-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; text-align: center; }
+    .scenario-yrs { font-size: 36px; font-weight: 800; letter-spacing: -1.5px; }
+    .principle { font-size: 12px; color: var(--text-secondary); padding: 6px 10px; background: var(--bg-input); border-radius: 99px; display: inline-block; margin: 3px; }
+  </style></head>
+<body><div class="app-layout"><nav class="sidebar"></nav><main class="main-content">
+  <div class="page-header"><h1>🚀 Plan to Millionaire</h1>
+    <p>One-click financial plan from your paystubs, bills, debts, accounts. Encodes Bogleheads / Vanguard / Ramsey-tier principles.</p></div>
+
+  <div class="hero">
+    <h2>Your personalized financial blueprint</h2>
+    <p style="font-size:14px;color:var(--text-secondary);margin-bottom:20px;max-width:600px">Pulls every paystub, bill, debt, and account · runs them through a research-backed waterfall · gives you a numbered step-by-step plan, debt strategy, and projected timeline to $1M.</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <button class="btn-mega" id="generate-btn">⚡ Generate My Plan</button>
+      <span id="plan-meta" style="font-size:12px;color:var(--text-muted)"></span>
+    </div>
+  </div>
+
+  <div id="plan-content"></div>
+</main></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/plan.js"></script>
+</body></html>
