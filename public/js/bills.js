@@ -169,10 +169,13 @@ function renderPieCharts() {
   // ── Budget breakdown pie (income vs bills vs events vs savings) ───────────
   API.get('/api/dashboard').then(data => {
     const totalBills = allBills.filter(b => b.active && !b.is_savings).reduce((s, b) => s + (b.computed_portion || 0), 0);
-    const incomeLeft = Math.max(0, (data.monthly.income || 0) - totalBills - (data.monthly.events || 0) - (data.monthly.savings || 0));
+    // Use the better of allBills savings (includes auto-allocate estimates) or dashboard savings
+    const savingsFromBills = allBills.filter(b => b.active && b.is_savings).reduce((s, b) => s + (b.computed_portion || 0), 0);
+    const totalSavings = Math.max(savingsFromBills, data.monthly.savings || 0);
+    const incomeLeft = Math.max(0, (data.monthly.income || 0) - totalBills - (data.monthly.events || 0) - totalSavings);
 
     const bLabels = ['Bills', 'Events', 'Savings', 'Remaining'];
-    const bValues = [totalBills, data.monthly.events || 0, data.monthly.savings || 0, incomeLeft];
+    const bValues = [totalBills, data.monthly.events || 0, totalSavings, incomeLeft];
     const bColors = ['#ef4444', '#a855f7', '#14b8a6', '#22c55e'];
 
     if (budgetPieChart) budgetPieChart.destroy();

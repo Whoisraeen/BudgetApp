@@ -190,6 +190,10 @@ async function autoAllocateSavingsForPaycheck(paycheckId) {
   const totalEvents = events.reduce((s, e) => s + (e.actual_cost ?? e.estimated_cost ?? 0), 0);
   let available = (paycheck.amount || 0) - totalBills - totalEvents;
 
+  // Remove any existing auto contributions for this paycheck so we don't double up
+  // IMPORTANT: do this BEFORE querying goals so contributed totals don't include stale values
+  await run('DELETE FROM savings_contributions WHERE paycheck_id=? AND auto=1', [paycheckId]);
+
   const goals = await query(
     `SELECT g.*,
      (SELECT COALESCE(SUM(amount),0) FROM savings_contributions WHERE savings_goal_id=g.id) as contributed
@@ -240,8 +244,6 @@ async function autoAllocateSavingsForPaycheck(paycheckId) {
     .filter(c => c.perCheck > 0)
     .sort((a, b) => (b.goal.priority - a.goal.priority) || (b.urgencyScore - a.urgencyScore));
 
-  // Remove any existing auto contributions for this paycheck so we don't double up
-  await run('DELETE FROM savings_contributions WHERE paycheck_id=? AND auto=1', [paycheckId]);
 
   const created = [];
   for (const c of candidates) {
@@ -541,8 +543,33 @@ app.get('/api/bills', async (req, res) => {
         FROM savings_goals g WHERE g.active=1
       `);
 
+      // Also fetch recent auto-contribution averages per goal for better estimates
+      const recentContribs = await query(`
+        SELECT savings_goal_id, AVG(amount) as avg_amount
+        FROM savings_contributions
+        WHERE auto=1 AND date >= date('now', '-60 days')
+        GROUP BY savings_goal_id
+      `);
+      const recentAvgMap = {};
+      recentContribs.forEach(rc => { recentAvgMap[rc.savings_goal_id] = rc.avg_amount; });
+
       for (const g of goals) {
-        const perCheck = g.per_check_contribution || 0;
+        let perCheck = g.per_check_contribution || 0;
+        // If per_check is 0 but auto_allocate is on, estimate from recent allocations
+        // or from target date / remaining amount
+        if (perCheck <= 0 && g.auto_allocate) {
+          if (recentAvgMap[g.id]) {
+            perCheck = recentAvgMap[g.id];
+          } else if (g.target_date && g.target_amount) {
+            const current = (g.current_amount || 0) + (g.contributed || 0);
+            const remaining = Math.max(0, g.target_amount - current);
+            const today = new Date();
+            const target = new Date(g.target_date + 'T12:00:00');
+            const daysLeft = Math.max(1, Math.ceil((target - today) / 86400000));
+            const periodsLeft = Math.max(1, Math.ceil(daysLeft / (freq === 'weekly' ? 7 : freq === 'monthly' ? 30 : 14)));
+            perCheck = remaining / periodsLeft;
+          }
+        }
         const monthly = perCheck * checksPerMonth;
         bills.push({
           id: 'sv-' + g.id,
