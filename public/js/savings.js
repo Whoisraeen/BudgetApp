@@ -163,9 +163,23 @@ function openContrib(id, name) {
 }
 
 async function autoAllocateAll() {
-  const r = await API.post('/api/savings/auto-allocate-upcoming', { count: 6 });
-  toast(`✓ Allocated ${r.contributions_created} contributions across ${r.paychecks_processed} paychecks`);
-  loadSavings();
+  const btn = document.getElementById('auto-allocate-btn');
+  const origText = btn ? btn.textContent : '';
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Allocating…'; }
+    const r = await API.post('/api/savings/auto-allocate-upcoming', { count: 6 });
+    if (r.contributions_created === 0) {
+      toast('No contributions created — check that goals have per-check amounts or auto-allocate enabled, and that upcoming paychecks exist.', 'error');
+    } else {
+      toast(`✓ Allocated ${r.contributions_created} contributions across ${r.paychecks_processed} paychecks`);
+    }
+    loadSavings();
+  } catch (err) {
+    console.error('Auto-allocate failed:', err);
+    toast('Auto-allocate failed: ' + (err.message || 'Unknown error'), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = origText || '⚡ Auto-Allocate Upcoming'; }
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
