@@ -175,20 +175,23 @@ async function computeAssignedBills(paycheck) {
 //   1. For each active goal with auto_allocate=1, allocate min(per_check, remaining_gap).
 //   2. If a target_date is set, scale per_check up to catch up (catch-up logic).
 //   3. Sort by priority desc, then by urgency (target_date - now / remaining_gap).
-//   4. Cap total allocation at available net (paycheck.amount - bills - events).
-async function autoAllocateSavingsForPaycheck(paycheckId) {
+//   4. Cap total allocation at available net (paycheck.amount - bills - events - minBalance).
+//   5. Never allocate more than would leave the user below their minimum balance.
+async function autoAllocateSavingsForPaycheck(paycheckId, minBalance = 0) {
   const enabled = await getSetting('auto_savings_enabled', 'true');
   if (enabled !== 'true') return [];
 
   const paycheck = await get('SELECT * FROM paychecks WHERE id=?', [paycheckId]);
   if (!paycheck) return [];
 
-  // Skip extras unless user said otherwise (extras still auto-allocate — they're prime targets)
   const { assigned } = await computeAssignedBills(paycheck);
   const events = await query('SELECT * FROM events WHERE paycheck_id=?', [paycheckId]);
   const totalBills = assigned.reduce((s, b) => s + (b.actual_amount ?? b.assigned_portion), 0);
   const totalEvents = events.reduce((s, e) => s + (e.actual_cost ?? e.estimated_cost ?? 0), 0);
-  let available = (paycheck.amount || 0) - totalBills - totalEvents;
+
+  // Subtract minimum balance from available — never allocate below the floor
+  let available = (paycheck.amount || 0) - totalBills - totalEvents - minBalance;
+  if (available <= 0) return []; // Nothing to allocate after bills + min balance
 
   // Remove any existing auto contributions for this paycheck so we don't double up
   // IMPORTANT: do this BEFORE querying goals so contributed totals don't include stale values
@@ -226,12 +229,11 @@ async function autoAllocateSavingsForPaycheck(paycheckId) {
   }).filter(c => c.remaining > 0);
 
   // Fair-share fallback: any auto-allocate goal with no per-check + no target_date
-  // gets a slice of remaining cash weighted by priority. Without this, the user
-  // can hit "Auto Allocate" and have nothing happen because every goal is $0/check.
+  // gets a slice of remaining cash weighted by priority.
   const fairShareGoals = candidates.filter(c => c.needsFairShare);
   if (fairShareGoals.length > 0 && available > 0) {
     const totalWeight = fairShareGoals.reduce((s, c) => s + Math.max(1, c.goal.priority || 1), 0);
-    // Reserve at most 80% of available net for fair-share so user keeps some cushion
+    // Use 80% of available for fair-share so there's still a cushion
     const fairSharePool = available * 0.8;
     for (const c of fairShareGoals) {
       const weight = Math.max(1, c.goal.priority || 1);
@@ -244,19 +246,20 @@ async function autoAllocateSavingsForPaycheck(paycheckId) {
     .filter(c => c.perCheck > 0)
     .sort((a, b) => (b.goal.priority - a.goal.priority) || (b.urgencyScore - a.urgencyScore));
 
-
   const created = [];
   for (const c of candidates) {
     if (available <= 0) break;
+    // Round to nearest cent, cap at remaining and available
     const amount = Math.min(c.perCheck, c.remaining, available);
     if (amount <= 0.005) continue;
+    const rounded = +amount.toFixed(2);
     await run(
       `INSERT INTO savings_contributions (savings_goal_id, paycheck_id, amount, date, note, auto)
        VALUES (?, ?, ?, ?, ?, 1)`,
-      [c.goal.id, paycheckId, +amount.toFixed(2), paycheck.date, 'Auto-allocated']
+      [c.goal.id, paycheckId, rounded, paycheck.date, 'Auto-allocated']
     );
-    available -= amount;
-    created.push({ goal_id: c.goal.id, amount });
+    available -= rounded;
+    created.push({ goal_id: c.goal.id, goal_name: c.goal.name, amount: rounded });
   }
 
   // Persist net_remaining
@@ -490,16 +493,24 @@ app.post('/api/savings/auto-allocate-upcoming', async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     const limit = parseInt(req.body?.count) || 6;
+    const minBalance = parseFloat(req.body?.min_balance) || 0;
     const pcs = await query(
       'SELECT id FROM paychecks WHERE date >= ? ORDER BY date ASC LIMIT ?',
       [today, limit]
     );
     let total = 0;
+    let totalAmount = 0;
     for (const p of pcs) {
-      const c = await autoAllocateSavingsForPaycheck(p.id);
+      const c = await autoAllocateSavingsForPaycheck(p.id, minBalance);
       total += c.length;
+      totalAmount += c.reduce((s, x) => s + x.amount, 0);
     }
-    res.json({ ok: true, paychecks_processed: pcs.length, contributions_created: total });
+    res.json({
+      ok: true,
+      paychecks_processed: pcs.length,
+      contributions_created: total,
+      total_amount: +totalAmount.toFixed(2)
+    });
   } catch(e) { res.status(500).json({error: e.message}); }
 });
 
@@ -693,6 +704,9 @@ app.delete('/api/events/:id', async (req, res) => {
 app.get('/api/savings', async (req, res) => {
   try {
     const goals = await query('SELECT * FROM savings_goals ORDER BY priority DESC, name ASC');
+    const freq = await getSetting('pay_frequency', 'biweekly');
+    const periodDays = frequencyDays(freq);
+
     const enriched = await Promise.all(goals.map(async g => {
       const contribRow = await get(
         'SELECT COALESCE(SUM(amount), 0) as total FROM savings_contributions WHERE savings_goal_id=?',
@@ -702,18 +716,39 @@ app.get('/api/savings', async (req, res) => {
       const current = g.current_amount + totalContributed;
       const pct = g.target_amount > 0 ? Math.min(100, (current / g.target_amount) * 100) : 0;
 
-      // Catch-up calc: required per-check given target_date
+      // Catch-up calc: required per-check given target_date (uses actual pay freq)
       let suggested_per_check = g.per_check_contribution || 0;
       let on_track = true;
       if (g.target_date) {
         const today = new Date();
         const target = new Date(g.target_date + 'T12:00:00');
         const daysLeft = Math.max(1, Math.ceil((target - today) / 86400000));
-        const checksLeft = Math.max(1, Math.ceil(daysLeft / 14));
+        const checksLeft = Math.max(1, Math.ceil(daysLeft / periodDays));
         const remaining = Math.max(0, g.target_amount - current);
         suggested_per_check = +(remaining / checksLeft).toFixed(2);
         on_track = (g.per_check_contribution || 0) >= suggested_per_check - 0.5;
       }
+
+      // Recent contributions (last 5)
+      const recent = await query(
+        `SELECT amount, date, auto, note FROM savings_contributions
+         WHERE savings_goal_id=? ORDER BY date DESC LIMIT 5`,
+        [g.id]
+      );
+
+      // Savings velocity: compare last 30d contributions vs previous 30d
+      const last30 = await get(
+        `SELECT COALESCE(SUM(amount),0) as t FROM savings_contributions
+         WHERE savings_goal_id=? AND date >= date('now', '-30 days')`,
+        [g.id]
+      );
+      const prev30 = await get(
+        `SELECT COALESCE(SUM(amount),0) as t FROM savings_contributions
+         WHERE savings_goal_id=? AND date >= date('now', '-60 days') AND date < date('now', '-30 days')`,
+        [g.id]
+      );
+      const velocity = (last30?.t || 0) - (prev30?.t || 0);
+
       return {
         ...g,
         current_amount: current,
@@ -721,9 +756,79 @@ app.get('/api/savings', async (req, res) => {
         progress_pct: pct,
         suggested_per_check,
         on_track,
+        recent_contributions: recent,
+        savings_velocity: velocity,
+        last_30d: last30?.t || 0,
       };
     }));
     res.json(enriched);
+  } catch(e) { res.status(500).json({error: e.message}); }
+});
+
+// ─── Savings Analytics (MUST be before :id routes) ────────────────────────────
+
+app.get('/api/savings/analytics', async (req, res) => {
+  try {
+    // Monthly contribution totals for the last 12 months
+    const monthlyTotals = await query(`
+      SELECT strftime('%Y-%m', date) as month,
+             SUM(amount) as total,
+             COUNT(*) as count
+      FROM savings_contributions
+      WHERE date >= date('now', '-12 months')
+      GROUP BY strftime('%Y-%m', date)
+      ORDER BY month ASC
+    `);
+
+    // Base total (current_amount fields on goals = starting balances)
+    const baseRow = await get(
+      'SELECT COALESCE(SUM(current_amount),0) as total FROM savings_goals WHERE active=1'
+    );
+
+    // Total contributed all time
+    const totalRow = await get(
+      'SELECT COALESCE(SUM(amount),0) as total FROM savings_contributions'
+    );
+
+    // Auto vs manual breakdown
+    const autoRow = await get(
+      'SELECT COALESCE(SUM(amount),0) as total FROM savings_contributions WHERE auto=1'
+    );
+    const manualRow = await get(
+      'SELECT COALESCE(SUM(amount),0) as total FROM savings_contributions WHERE auto=0 OR auto IS NULL'
+    );
+
+    // Contribution streak: consecutive months with at least one contribution
+    const allDates = await query(
+      'SELECT DISTINCT date FROM savings_contributions ORDER BY date DESC'
+    );
+    let streak = 0;
+    if (allDates.length > 0) {
+      const monthSet = new Set(allDates.map(d => d.date?.slice(0, 7)));
+      const now = new Date();
+      for (let i = 0; i < 24; i++) {
+        const m = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = m.toISOString().slice(0, 7);
+        if (monthSet.has(key)) streak++;
+        else break;
+      }
+    }
+
+    // Format monthly labels nicely
+    const formattedMonthly = monthlyTotals.map(m => ({
+      month: new Date(m.month + '-01T12:00:00').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      total: m.total,
+      count: m.count
+    }));
+
+    res.json({
+      monthly_totals: formattedMonthly,
+      base_total: baseRow?.total || 0,
+      total_contributed: totalRow?.total || 0,
+      auto_total: autoRow?.total || 0,
+      manual_total: manualRow?.total || 0,
+      streak_months: streak,
+    });
   } catch(e) { res.status(500).json({error: e.message}); }
 });
 
@@ -784,6 +889,7 @@ app.get('/api/savings/:id/contributions', async (req, res) => {
     res.json(rows);
   } catch(e) { res.status(500).json({error: e.message}); }
 });
+
 
 // ─── Transactions (manual spending tracking) ──────────────────────────────────
 
