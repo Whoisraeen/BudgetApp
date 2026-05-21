@@ -808,25 +808,28 @@ app.get('/api/savings', async (req, res) => {
 
 app.get('/api/savings/analytics', async (req, res) => {
   try {
-    // Monthly contribution totals for the last 12 months
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Monthly contribution totals for the last 12 months (ACTUAL only — date <= today)
     const monthlyTotals = await query(`
       SELECT strftime('%Y-%m', date) as month,
              SUM(amount) as total,
              COUNT(*) as count
       FROM savings_contributions
-      WHERE date >= date('now', '-12 months')
+      WHERE date >= date('now', '-12 months') AND date <= ?
       GROUP BY strftime('%Y-%m', date)
       ORDER BY month ASC
-    `);
+    `, [todayStr]);
 
     // Base total (current_amount fields on goals = starting balances)
     const baseRow = await get(
       'SELECT COALESCE(SUM(current_amount),0) as total FROM savings_goals WHERE active=1'
     );
 
-    // Total contributed all time
+    // Total contributed all time (actual only)
     const totalRow = await get(
-      'SELECT COALESCE(SUM(amount),0) as total FROM savings_contributions'
+      'SELECT COALESCE(SUM(amount),0) as total FROM savings_contributions WHERE date <= ?',
+      [todayStr]
     );
 
     // Auto vs manual breakdown
